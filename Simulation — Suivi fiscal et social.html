@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Simulation — Suivi fiscal et social</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#f4f6f8;--card:#fff;--tx:#1b2430;--mut:#6b7684;--bd:#d5dbe3;--hd:#1f4e79;--hdt:#fff;
+--ok:#c6efce;--okt:#1e6b2f;--pr:#bdd7ee;--prt:#1f4e79;--ct:#e1d5f0;--ctt:#5b2c83;--td:#eceff3;--tdt:#44505e;--nc:#d9d9d9;--nct:#7a7a7a;--lt:#ffc7ce;--ltt:#9c0006;--ac:#d9822b}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14181d;--card:#1d232b;--tx:#e8edf2;--mut:#9aa6b4;--bd:#34404d;--hd:#2c5d8f;--ok:#1f4a2a;--okt:#a9e6b5;--pr:#1f3d5a;--prt:#a8cff2;--ct:#3b2b52;--ctt:#d5bff0;--td:#2a323c;--tdt:#b4bfcc;--nc:#333a43;--nct:#8a94a0;--lt:#5a1f26;--ltt:#ffb3b9}}
+html{color-scheme:light dark;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--tx);padding:14px}
+h1{font-size:18px;margin:0 0 10px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+button{font:inherit;padding:8px 14px;border-radius:8px;border:1px solid var(--bd);background:var(--card);color:var(--tx);cursor:pointer}
+button.p{background:var(--hd);color:#fff;border-color:var(--hd)}
+.tabs{display:flex;gap:4px}.tab{padding:7px 12px;border-radius:8px 8px 0 0;background:var(--td);color:var(--mut);font-size:13px}
+.tab.on{background:var(--card);color:var(--tx);font-weight:600;box-shadow:0 -2px 0 var(--ac) inset}
+.sheet{background:var(--card);border:1px solid var(--bd);border-radius:0 8px 8px 8px;padding:12px;min-height:250px}
+.sum{font-size:13px;color:var(--mut);margin-bottom:8px}.sum b{color:var(--tx)}
+.w{overflow-x:auto;max-width:100%}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{border:1px solid var(--bd);padding:7px 8px;text-align:center;white-space:nowrap;height:20px}
+th{background:var(--hd);color:var(--hdt)}td:first-child{text-align:left;font-weight:600}
+tr.dl td{background:var(--td);color:var(--mut);font-size:12px}
+.ok{background:var(--ok);color:var(--okt)}.prog{background:var(--pr);color:var(--prt)}.ctrl{background:var(--ct);color:var(--ctt)}
+.todo{background:var(--td);color:var(--tdt)}.nc{background:var(--nc);color:var(--nct)}.late{background:var(--lt);color:var(--ltt);font-weight:700}
+.sel{outline:3px solid var(--ac);outline-offset:-3px}
+.pop{animation:pop .4s}@keyframes pop{0%{transform:scale(.8);opacity:.2}100%{transform:scale(1);opacity:1}}
+.cap{margin-top:12px;padding:12px 14px;border-radius:8px;background:var(--hd);color:#fff;font-size:15px;min-height:44px}
+.hide{display:none}
+</style></head><body>
+<h1>📊 Simulation : comment fonctionne le suivi fiscal et social</h1>
+<div class="bar"><button class="p" id="go">▶ Démarrer la simulation</button><button id="snd">🔊 Son : activé</button>
+<select id="vs" style="padding:8px;border-radius:8px;border:1px solid var(--bd);background:var(--card);color:var(--tx);max-width:220px"><option value="">Voix : automatique (homme)</option></select><span style="font-size:12px;color:var(--mut)">Exemple fictif · dates indicatives</span></div>
+<div class="tabs"><div class="tab on" id="t0">Paramètres</div><div class="tab" id="t1">Suivi fiscal</div><div class="tab" id="t2">Suivi CNSS</div></div>
+<div class="sheet">
+<div class="sum" id="sum">Sociétés : <b>0</b> · En retard : <b>0</b> · À surveiller : <b>0</b></div>
+<div class="w" id="s0"></div><div class="w hide" id="s1"></div><div class="w hide" id="s2"></div></div>
+<div class="cap" id="cap">Clique sur « Démarrer » (active le son de ton appareil pour la voix off).</div>
+<script>
+const $=id=>document.getElementById(id);
+const CL={"Terminé":"ok","En cours":"prog","En contrôle":"ctrl","Non commencé":"todo","NC":"nc"};
+const H0=["Société","Régime TVA","IR salaires","Droit de timbre","RAS IR foncier","CNSS Damancom"];
+const D0=[["ATLAS SARL","Mensuel","Oui","Non","Oui","Oui"],["PH LATIFA","Exonérée","—","—","—","Non"],["YOUSSEF NEGOCE SARL","Trimestriel","Non","Oui","Non","Oui"]];
+const H1=["Société","Régime","TVA sept.","TVA oct.","TVA T3","IR sal. oct.","Timbre oct.","Alerte"];
+const DL1=["Échéance légale →","","31/10","30/11","31/10","30/11","30/11",""];
+const D1=[["Terminé","En cours","NC","En contrôle","NC"],["NC","NC","NC","NC","NC"],["NC","NC","Non commencé","NC","En cours"]];
+const AL1=["OK","—","RETARD"];
+const H2=["Société","Sept.","Oct.","Nov.","Alerte"],DL2=["Échéance (le 10 du mois suivant) →","10/10","10/11","10/12",""];
+const D2=[["Terminé","Terminé","Non commencé"],["NC","NC","NC"],["Terminé","Terminé","Non commencé"]],AL2=["OK","—","OK"];
+function build(i,H,DL,n,m){let h="<table><tr>"+H.map(x=>"<th>"+x+"</th>").join("")+"</tr>";
+ if(DL)h+="<tr class='dl'>"+DL.map(x=>"<td>"+x+"</td>").join("")+"</tr>";
+ for(let r=0;r<3;r++){h+="<tr>";for(let c=0;c<H.length;c++)h+=`<td id="c${i}-${r}-${c}"></td>`;h+="</tr>"}
+ $("s"+i).innerHTML=h+"</table>"}
+let tok=0,snd=true,ac=null,vsel="";
+const MALE=/thomas|paul|henri|antoine|nicolas|male|homme|jean|claude|guillaume|mathieu|luc|david|bruno|remy|louis/i;
+function frVoices(){return speechSynthesis.getVoices().filter(x=>x.lang&&x.lang.toLowerCase().startsWith("fr"))}
+function pickVoice(){const l=frVoices();if(vsel){const s=l.find(x=>x.name===vsel);if(s)return s}return l.find(x=>MALE.test(x.name))||l[0]}
+function fillVoices(){if(!window.speechSynthesis)return;$("vs").innerHTML="<option value=''>Voix : automatique (homme)</option>"+frVoices().map(x=>"<option>"+x.name+"</option>").join("")}
+if(window.speechSynthesis){speechSynthesis.onvoiceschanged=fillVoices;fillVoices()}
+$("vs").onchange=e=>{vsel=e.target.value};
+const sleep=ms=>new Promise(r=>{const t=tok;setTimeout(()=>r(t===tok),ms)});
+function beep(f=620){if(!snd)return;try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();const o=ac.createOscillator(),g=ac.createGain();
+ o.frequency.value=f;g.gain.value=.05;o.connect(g);g.connect(ac.destination);o.start();g.gain.exponentialRampToValueAtTime(.0001,ac.currentTime+.12);o.stop(ac.currentTime+.13)}catch(e){}}
+function say(t){$("cap").textContent=t;return new Promise(res=>{const my=tok;let done=false;const end=()=>{if(!done){done=true;setTimeout(()=>res(my===tok),500)}};
+ if(snd&&window.speechSynthesis){try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang="fr-FR";u.rate=1;
+  const v=pickVoice();if(v)u.voice=v;u.pitch=(v&&MALE.test(v.name))?1.05:.7;u.onend=end;u.onerror=end;speechSynthesis.speak(u);setTimeout(end,t.length*95+2500);return}catch(e){}}
+ setTimeout(end,t.length*55+900)})}
+function tab(i){[0,1,2].forEach(k=>{$("t"+k).classList.toggle("on",k===i);$("s"+k).classList.toggle("hide",k!==i)});beep(480)}
+function put(id,txt,cls,snd2){const e=$(id);e.textContent=txt;e.className=(cls||"")+" pop";if(snd2!==false)beep()}
+async function type(id,txt){const e=$(id);for(let i=1;i<=txt.length;i++){e.textContent=txt.slice(0,i);if(!await sleep(35))return false}return true}
+function sum(n,l,w){$("sum").innerHTML=`Sociétés : <b>${n}</b> · En retard : <b>${l}</b> · À surveiller : <b>${w}</b>`}
+async function run(){
+ const t=++tok;if(window.speechSynthesis)speechSynthesis.cancel();
+ build(0,H0);build(1,H1,DL1);build(2,H2,DL2);H0.forEach((h,c)=>{});tab(0);sum(0,0,0);
+ for(let r=0;r<3;r++)for(let c=0;c<6;c++)$(`c0-${r}-${c}`).textContent="";
+ const ok=async p=>{const r=await p;return r&&t===tok};
+ if(!await ok(say("Voici le fichier au départ : tout est vide. Il y a trois feuilles : Paramètres, Suivi fiscal et Suivi CNSS.")))return;
+ if(!await ok(say("Première étape, dans la feuille Paramètres : on saisit le nom de chaque société, puis on indique ses impôts."))) return;
+ for(let r=0;r<3;r++){if(!await type(`c0-${r}-0`,D0[r][0]))return;$(`c0-${r}-0`).style.textAlign="left"}
+ if(!await ok(say("Les trois sociétés sont saisies. Maintenant, pour chacune, le régime de TVA, puis Oui ou Non pour chaque impôt : salaires, timbre, foncier et la CNSS.")))return;
+ for(let r=0;r<3;r++)for(let c=1;c<6;c++){const e=$(`c0-${r}-${c}`);e.classList.add("sel");await sleep(250);put(`c0-${r}-${c}`,D0[r][c],D0[r][c]==="Oui"?"ok":D0[r][c]==="Non"||D0[r][c]==="—"?"nc":"prog");if(!await sleep(80))return}
+ sum(3,0,0);
+ if(!await ok(say("Et c’est tout pour la configuration. Le reste du fichier se remplit tout seul à partir de ces réponses.")))return;
+ tab(1);
+ if(!await ok(say("Voici la feuille Suivi fiscal, encore vide, avec les échéances légales de chaque déclaration.")))return;
+ if(!await ok(say("Dès que le paramétrage est fait, les noms des sociétés et leur régime apparaissent automatiquement.")))return;
+ for(let r=0;r<3;r++){put(`c1-${r}-0`,D0[r][0],"");$(`c1-${r}-0`).style.textAlign="left";put(`c1-${r}-1`,D0[r][1],"");await sleep(300)}
+ if(!await ok(say("Les déclarations qui ne concernent pas une société sont automatiquement grisées : Non concerné. Il n’y a rien à faire dessus.")))return;
+ for(let r=0;r<3;r++)for(let c=0;c<5;c++)if(D1[r][c]==="NC"){put(`c1-${r}-${c+2}`,"Non concerné",CL.NC,false);await sleep(90)}
+ beep(400);
+ if(!await ok(say("Ensuite, le collaborateur choisit simplement un statut dans la liste déroulante : Non commencé, En cours, En contrôle ou Terminé.")))return;
+ for(let r=0;r<3;r++)for(let c=0;c<5;c++){const s=D1[r][c];if(s==="NC")continue;const id=`c1-${r}-${c+2}`;$(id).classList.add("sel");await sleep(500);put(id,s,CL[s]);await sleep(250)}
+ if(!await ok(say("Les couleurs permettent de voir l’avancement d’un coup d’œil : vert pour terminé, bleu pour en cours, violet pour en contrôle.")))return;
+ if(!await ok(say("Maintenant, les alertes. YOUSSEF NEGOCE a une TVA trimestrielle non commencée alors que l’échéance du trente et un octobre est dépassée.")))return;
+ put("c1-2-4","Non commencé","late");await sleep(500);
+ for(let r=0;r<3;r++){put(`c1-${r}-7`,AL1[r],AL1[r]==="RETARD"?"late":AL1[r]==="OK"?"ok":"nc");await sleep(250)}
+ sum(3,1,0);beep(220);
+ if(!await ok(say("Le fichier affiche RETARD en rouge, et le compteur en haut passe à : une société en retard. Une alerte orange, À surveiller, apparaît aussi quand l’échéance approche, cinq jours avant par défaut.")))return;
+ tab(2);
+ if(!await ok(say("Dernière feuille : le Suivi CNSS, pour la déclaration Damancom. Elle se dépose chaque mois avant le dix du mois suivant.")))return;
+ for(let r=0;r<3;r++){put(`c2-${r}-0`,D0[r][0],"");$(`c2-${r}-0`).style.textAlign="left";await sleep(200)}
+ for(let r=0;r<3;r++)for(let c=0;c<3;c++){const s=D2[r][c];put(`c2-${r}-${c+1}`,s==="NC"?"Non concerné":s,CL[s]);await sleep(160)}
+ for(let r=0;r<3;r++){put(`c2-${r}-4`,AL2[r],AL2[r]==="OK"?"ok":"nc");await sleep(150)}
+ if(!await ok(say("PH LATIFA n’est pas concernée par la CNSS, donc elle est grisée. Les autres sociétés suivent leur déclaration mois par mois.")))return;
+ await ok(say("Voilà comment ça marche : on paramètre une fois, on choisit les statuts, et le fichier calcule les alertes tout seul. Fin de la simulation."));
+ $("go").textContent="↻ Rejouer"}
+$("go").onclick=()=>{$("go").textContent="↻ Recommencer";run()};
+$("snd").onclick=()=>{snd=!snd;$("snd").textContent=snd?"🔊 Son : activé":"🔇 Son : désactivé";if(!snd&&window.speechSynthesis)speechSynthesis.cancel()};
+build(0,H0);build(1,H1,DL1);build(2,H2,DL2);
+</script></body></html>
